@@ -54,13 +54,13 @@ def create_tool_info(tool_spec, exec_fn_param: Optional[Callable] = None):
     # Claude 모델이 지원하지 않는 'strict' 속성을 제거
     tool_spec["function"].pop("strict", None)
     tool_name = tool_spec["function"]["name"]
-    # Converts tool name with double underscores to UDF dot notation.
+    # __ 가 포함된 도구 이름을 UDF 점 표기법으로 변환합니다.
     udf_name = tool_name.replace("__", ".")
 
     # UC 도구 호출을 위해 kwargs를 받아 UC 도구 실행 클라이언트에 전달하는 래퍼를 정의합니다.
     def exec_fn(**kwargs):
         function_result = uc_function_client.execute_function(udf_name, kwargs)
-        # Return error message if execution fails, result value if not.
+        # 실행이 실패하면 오류 메시지를, 성공하면 결과 값을 반환합니다.
         if function_result.error is not None:
             return function_result.error
         else:
@@ -70,7 +70,7 @@ def create_tool_info(tool_spec, exec_fn_param: Optional[Callable] = None):
     return ToolInfo(name=tool_name, spec=tool_spec, exec_fn=exec_fn_param or exec_fn)
 
 
-# List to store information about all tools available to the agent.
+# 에이전트가 사용할 모든 도구 정보를 저장하는 리스트입니다.
 TOOL_INFOS = []
 
 # Unity Catalog의 UDF는 에이전트 도구로 노출될 수 있습니다.
@@ -85,21 +85,22 @@ for tool_spec in uc_toolkit.tools:
     TOOL_INFOS.append(create_tool_info(tool_spec))
 
 
-# Use Databricks vector search indexes as tools
-# See https://docs.databricks.com/en/generative-ai/agent-framework/unstructured-retrieval-tools.html#locally-develop-vector-search-retriever-tools-with-ai-bridge
-# List to store vector search tool instances for unstructured retrieval.
+# Databricks 벡터 검색 인덱스를 도구로 사용하기
+# 자세한 내용은 https://docs.databricks.com/ko/generative-ai/agent-framework/unstructured-retrieval-tools.html#locally-develop-vector-search-retriever-tools-with-ai-bridge 참고
+# 비정형 검색을 위한 벡터 검색 도구 인스턴스를 저장하는 리스트입니다.
 VECTOR_SEARCH_TOOLS = []
 
-# To add vector search retriever tools,
-# use VectorSearchRetrieverTool and create_tool_info,
-# then append the result to TOOL_INFOS.
-# Example:
-# VECTOR_SEARCH_TOOLS.append(
-#     VectorSearchRetrieverTool(
-#         index_name="",
-#         # filters="..."
-#     )
-# )
+# 벡터 검색 검색기 도구를 추가하려면,
+# VectorSearchRetrieverTool과 create_tool_info를 사용하여
+# 결과를 TOOL_INFOS에 추가하세요.
+VECTOR_SEARCH_TOOLS.append(
+    VectorSearchRetrieverTool(
+        index_name="hpark_demos.ski_agent_workshop.doc_vector_index",
+        tool_name="databricks_docs_retriever",
+        tool_description="Retrieves customer handling guides from customer handling manual"
+        # filters="..."
+    )
+)
 
 for vs_tool in VECTOR_SEARCH_TOOLS:
     TOOL_INFOS.append(create_tool_info(vs_tool.tool, vs_tool.execute))
@@ -107,12 +108,12 @@ for vs_tool in VECTOR_SEARCH_TOOLS:
 
 class ToolCallingAgent(ResponsesAgent):
     """
-    Class representing a tool-calling Agent.
-    Handles both tool execution via exec_fn and LLM interactions via model serving.
+    도구 호출 에이전트를 나타내는 클래스입니다.
+    exec_fn을 통한 도구 실행과 model serving을 통한 LLM 상호작용을 모두 처리합니다.
     """
 
     def __init__(self, llm_endpoint: str, tools: list[ToolInfo]):
-        """Initializes the ToolCallingAgent with tools."""
+        """도구들과 함께 ToolCallingAgent를 초기화합니다."""
         self.llm_endpoint = llm_endpoint
         self.workspace_client = WorkspaceClient()
         self.model_serving_client: OpenAI = (
@@ -121,12 +122,12 @@ class ToolCallingAgent(ResponsesAgent):
         self._tools_dict = {tool.name: tool for tool in tools}
 
     def get_tool_specs(self) -> list[dict]:
-        """Returns tool specifications in the format OpenAI expects."""
+        """OpenAI에서 기대하는 형식으로 도구 사양을 반환합니다."""
         return [tool_info.spec for tool_info in self._tools_dict.values()]
 
     @mlflow.trace(span_type=SpanType.TOOL)
     def execute_tool(self, tool_name: str, args: dict) -> Any:
-        """Executes the specified tool with the given arguments."""
+        """주어진 인자를 사용하여 지정된 도구를 실행합니다."""
         return self._tools_dict[tool_name].exec_fn(**args)
 
     @backoff.on_exception(backoff.expo, openai.RateLimitError)
@@ -146,7 +147,7 @@ class ToolCallingAgent(ResponsesAgent):
         self, tool_call: dict[str, Any], messages: list[dict[str, Any]]
     ) -> ResponsesAgentStreamEvent:
         """
-        Execute tool calls, add them to the running message history, and return a ResponsesStreamEvent w/ tool output
+        도구 호출을 실행하고, 실행 결과를 메시지 히스토리에 추가한 뒤, 도구 출력이 포함된 ResponsesStreamEvent를 반환합니다.
         """
         args = json.loads(tool_call["arguments"])
         result = str(self.execute_tool(tool_name=tool_call["name"], args=args))

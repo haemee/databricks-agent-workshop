@@ -1,18 +1,18 @@
 # Databricks notebook source
 # MAGIC %md
-# MAGIC # Mosaic AI Agent Framework: Author and deploy an OpenAI Responses API agent using a model hosted on Mosaic AI Foundation Model API
+# MAGIC # Mosaic AI 에이전트 프레임워크: Mosaic AI Foundation Model API에 호스팅된 모델을 사용하여 OpenAI Responses API 에이전트를 작성하고 배포하기
 # MAGIC
-# MAGIC This notebook shows how to author an OpenAI Responses agent and wrap it using the [`ResponsesAgent`](https://mlflow.org/docs/latest/api_reference/python_api/mlflow.pyfunc.html#mlflow.pyfunc.ResponsesAgent) interface to make it compatible with Mosaic AI. In this notebook you learn to:
+# MAGIC 이 노트북에서는 OpenAI Responses 에이전트를 작성하고 [`ResponsesAgent`](https://mlflow.org/docs/latest/api_reference/python_api/mlflow.pyfunc.html#mlflow.pyfunc.ResponsesAgent) 인터페이스로 래핑하여 Mosaic AI와 호환되도록 만드는 방법을 보여줍니다. 이 노트북에서 다음을 학습합니다:
 # MAGIC
-# MAGIC - Author an [Open AI Responses API](https://platform.openai.com/docs/api-reference/responses) agent (wrapped with `ResponsesAgent`) that calls an LLM hosted using Mosaic AI Foundation Models.
-# MAGIC - Manually test the agent
-# MAGIC - Evaluate the agent using Mosaic AI Agent Evaluation
-# MAGIC - Log and deploy the agent
+# MAGIC - Mosaic AI Foundation Models를 사용하여 호스팅된 LLM을 호출하는 [Open AI Responses API](https://platform.openai.com/docs/api-reference/responses) 에이전트(ResponsesAgent로 래핑)를 작성합니다.
+# MAGIC - 에이전트를 수동으로 테스트합니다
+# MAGIC - Mosaic AI 에이전트 평가를 통해 에이전트를 평가합니다
+# MAGIC - 에이전트를 기록하고 배포합니다
 # MAGIC
-# MAGIC To learn more about authoring an agent using Mosaic AI Agent Framework, see Databricks documentation ([AWS](https://docs.databricks.com/aws/generative-ai/agent-framework/author-agent) | [Azure](https://learn.microsoft.com/azure/databricks/generative-ai/agent-framework/create-chat-model)).
+# MAGIC Mosaic AI 에이전트 프레임워크를 사용하여 에이전트를 작성하는 방법에 대해 자세히 알아보려면 Databricks 문서([AWS](https://docs.databricks.com/aws/generative-ai/agent-framework/author-agent) | [Azure](https://learn.microsoft.com/azure/databricks/generative-ai/agent-framework/create-chat-model))를 참조하세요.
 # MAGIC
-# MAGIC ## Prerequisites
-# MAGIC - Address all `TODO`s in this notebook.
+# MAGIC ## 사전 준비 사항
+# MAGIC - 이 노트북의 모든 `TODO`를 해결하세요.
 
 # COMMAND ----------
 
@@ -23,13 +23,13 @@
 
 # MAGIC %md
 # MAGIC
-# MAGIC ## Define the agent in code
-# MAGIC Define the agent code in a single cell below. This lets you easily write the agent code to a local Python file, using the `%%writefile` magic command, for subsequent logging and deployment.
+# MAGIC ## 코드로 에이전트 정의하기
+# MAGIC 아래의 단일 셀에서 에이전트 코드를 정의하세요. 이렇게 하면 `%%writefile` 매직 명령어를 사용하여 에이전트 코드를 로컬 Python 파일로 쉽게 작성할 수 있으며, 이후 로깅 및 배포에 활용할 수 있습니다.
 # MAGIC
-# MAGIC #### Agent tools
-# MAGIC This agent code adds the built-in Unity Catalog function `system.ai.python_exec` to the agent. The agent code also includes commented-out sample code for adding a vector search index to perform unstructured data retrieval.
+# MAGIC #### 에이전트 도구
+# MAGIC 이 에이전트 코드는 Unity Catalog의 내장 함수인 `system.ai.python_exec`를 에이전트에 추가합니다. 또한, 비정형 데이터 검색을 수행하기 위한 벡터 검색 인덱스를 추가합니다.
 # MAGIC
-# MAGIC For more examples of tools to add to your agent, see Databricks documentation ([AWS](https://docs.databricks.com/aws/generative-ai/agent-framework/agent-tool) | [Azure](https://learn.microsoft.com/en-us/azure/databricks/generative-ai/agent-framework/agent-tool))
+# MAGIC 에이전트에 추가할 수 있는 도구의 더 많은 예시는 Databricks 문서([AWS](https://docs.databricks.com/aws/generative-ai/agent-framework/agent-tool) | [Azure](https://learn.microsoft.com/en-us/azure/databricks/generative-ai/agent-framework/agent-tool))를 참고하세요.
 
 # COMMAND ----------
 
@@ -90,13 +90,13 @@
 # MAGIC     # Claude 모델이 지원하지 않는 'strict' 속성을 제거
 # MAGIC     tool_spec["function"].pop("strict", None)
 # MAGIC     tool_name = tool_spec["function"]["name"]
-# MAGIC     # Converts tool name with double underscores to UDF dot notation.
+# MAGIC     # __ 가 포함된 도구 이름을 UDF 점 표기법으로 변환합니다.
 # MAGIC     udf_name = tool_name.replace("__", ".")
 # MAGIC
 # MAGIC     # UC 도구 호출을 위해 kwargs를 받아 UC 도구 실행 클라이언트에 전달하는 래퍼를 정의합니다.
 # MAGIC     def exec_fn(**kwargs):
 # MAGIC         function_result = uc_function_client.execute_function(udf_name, kwargs)
-# MAGIC         # Return error message if execution fails, result value if not.
+# MAGIC         # 실행이 실패하면 오류 메시지를, 성공하면 결과 값을 반환합니다.
 # MAGIC         if function_result.error is not None:
 # MAGIC             return function_result.error
 # MAGIC         else:
@@ -106,7 +106,7 @@
 # MAGIC     return ToolInfo(name=tool_name, spec=tool_spec, exec_fn=exec_fn_param or exec_fn)
 # MAGIC
 # MAGIC
-# MAGIC # List to store information about all tools available to the agent.
+# MAGIC # 에이전트가 사용할 모든 도구 정보를 저장하는 리스트입니다.
 # MAGIC TOOL_INFOS = []
 # MAGIC
 # MAGIC # Unity Catalog의 UDF는 에이전트 도구로 노출될 수 있습니다.
@@ -121,15 +121,14 @@
 # MAGIC     TOOL_INFOS.append(create_tool_info(tool_spec))
 # MAGIC
 # MAGIC
-# MAGIC # Use Databricks vector search indexes as tools
-# MAGIC # See https://docs.databricks.com/en/generative-ai/agent-framework/unstructured-retrieval-tools.html#locally-develop-vector-search-retriever-tools-with-ai-bridge
-# MAGIC # List to store vector search tool instances for unstructured retrieval.
+# MAGIC # Databricks 벡터 검색 인덱스를 도구로 사용하기
+# MAGIC # 자세한 내용은 https://docs.databricks.com/ko/generative-ai/agent-framework/unstructured-retrieval-tools.html#locally-develop-vector-search-retriever-tools-with-ai-bridge 참고
+# MAGIC # 비정형 검색을 위한 벡터 검색 도구 인스턴스를 저장하는 리스트입니다.
 # MAGIC VECTOR_SEARCH_TOOLS = []
 # MAGIC
-# MAGIC # To add vector search retriever tools,
-# MAGIC # use VectorSearchRetrieverTool and create_tool_info,
-# MAGIC # then append the result to TOOL_INFOS.
-# MAGIC # Example:
+# MAGIC # 벡터 검색 검색기 도구를 추가하려면,
+# MAGIC # VectorSearchRetrieverTool과 create_tool_info를 사용하여
+# MAGIC # 결과를 TOOL_INFOS에 추가하세요.
 # MAGIC VECTOR_SEARCH_TOOLS.append(
 # MAGIC     VectorSearchRetrieverTool(
 # MAGIC         index_name="hpark_demos.ski_agent_workshop.doc_vector_index",
@@ -145,12 +144,12 @@
 # MAGIC
 # MAGIC class ToolCallingAgent(ResponsesAgent):
 # MAGIC     """
-# MAGIC     Class representing a tool-calling Agent.
-# MAGIC     Handles both tool execution via exec_fn and LLM interactions via model serving.
+# MAGIC     도구 호출 에이전트를 나타내는 클래스입니다.
+# MAGIC     exec_fn을 통한 도구 실행과 model serving을 통한 LLM 상호작용을 모두 처리합니다.
 # MAGIC     """
 # MAGIC
 # MAGIC     def __init__(self, llm_endpoint: str, tools: list[ToolInfo]):
-# MAGIC         """Initializes the ToolCallingAgent with tools."""
+# MAGIC         """도구들과 함께 ToolCallingAgent를 초기화합니다."""
 # MAGIC         self.llm_endpoint = llm_endpoint
 # MAGIC         self.workspace_client = WorkspaceClient()
 # MAGIC         self.model_serving_client: OpenAI = (
@@ -159,12 +158,12 @@
 # MAGIC         self._tools_dict = {tool.name: tool for tool in tools}
 # MAGIC
 # MAGIC     def get_tool_specs(self) -> list[dict]:
-# MAGIC         """Returns tool specifications in the format OpenAI expects."""
+# MAGIC         """OpenAI에서 기대하는 형식으로 도구 사양을 반환합니다."""
 # MAGIC         return [tool_info.spec for tool_info in self._tools_dict.values()]
 # MAGIC
 # MAGIC     @mlflow.trace(span_type=SpanType.TOOL)
 # MAGIC     def execute_tool(self, tool_name: str, args: dict) -> Any:
-# MAGIC         """Executes the specified tool with the given arguments."""
+# MAGIC         """주어진 인자를 사용하여 지정된 도구를 실행합니다."""
 # MAGIC         return self._tools_dict[tool_name].exec_fn(**args)
 # MAGIC
 # MAGIC     @backoff.on_exception(backoff.expo, openai.RateLimitError)
@@ -184,7 +183,7 @@
 # MAGIC         self, tool_call: dict[str, Any], messages: list[dict[str, Any]]
 # MAGIC     ) -> ResponsesAgentStreamEvent:
 # MAGIC         """
-# MAGIC         Execute tool calls, add them to the running message history, and return a ResponsesStreamEvent w/ tool output
+# MAGIC         도구 호출을 실행하고, 실행 결과를 메시지 히스토리에 추가한 뒤, 도구 출력이 포함된 ResponsesStreamEvent를 반환합니다.
 # MAGIC         """
 # MAGIC         args = json.loads(tool_call["arguments"])
 # MAGIC         result = str(self.execute_tool(tool_name=tool_call["name"], args=args))
@@ -265,11 +264,10 @@
 # COMMAND ----------
 
 # MAGIC %md
-# MAGIC ## Test the agent
+# MAGIC ## 에이전트 테스트
 # MAGIC
-# MAGIC Interact with the agent to test its output. Since we manually traced methods within `ResponsesAgent`, you can view the trace for each step the agent takes, with any LLM calls made via the OpenAI SDK automatically traced by autologging.
+# MAGIC 에이전트와 상호작용하여 출력을 테스트하세요. `ResponsesAgent` 내에서 메서드를 수동으로 추적했으므로, 에이전트가 수행하는 각 단계의 추적을 볼 수 있습니다. OpenAI SDK를 통해 수행된 모든 LLM 호출은 자동 로깅에 의해 자동으로 추적됩니다.
 # MAGIC
-# MAGIC Replace this placeholder input with an appropriate domain-specific example for your agent.
 
 # COMMAND ----------
 
@@ -284,6 +282,12 @@ print(result.model_dump(exclude_none=True))
 
 # COMMAND ----------
 
+
+result = AGENT.predict({"input": [{"role": "user", "content": "고객 질문에 답할 담당자가 없을 때는 어떻게 해야돼?"}], "custom_inputs": {"session_id": "test-session"}})
+print(result.model_dump(exclude_none=True))
+
+# COMMAND ----------
+
 for chunk in AGENT.predict_stream(
     {"input": [{"role": "user", "content": "What is 6*7 in Python?"}], "custom_inputs": {"session_id": "test-session-stream"}}
 ):
@@ -292,16 +296,16 @@ for chunk in AGENT.predict_stream(
 # COMMAND ----------
 
 # MAGIC %md
-# MAGIC ## Log the agent as an MLflow model
+# MAGIC ## 에이전트를 MLflow 모델로 기록하기
 # MAGIC
-# MAGIC Log the agent as code from the `agent.py` file. See [MLflow - Models from Code](https://mlflow.org/docs/latest/models.html#models-from-code).
+# MAGIC `tool_calling_agent.py` 파일의 코드에서 에이전트를 기록하세요. 자세한 내용은 [MLflow - 코드에서 모델 기록](https://mlflow.org/docs/latest/models.html#models-from-code)을 참고하세요.
 # MAGIC
-# MAGIC ### Enable automatic authentication for Databricks resources
-# MAGIC For the most common Databricks resource types, Databricks supports and recommends declaring resource dependencies for the agent upfront during logging. This enables automatic authentication passthrough when you deploy the agent. With automatic authentication passthrough, Databricks automatically provisions, rotates, and manages short-lived credentials to securely access these resource dependencies from within the agent endpoint.
+# MAGIC ### Databricks 리소스에 대한 자동 인증 활성화
+# MAGIC 가장 일반적인 Databricks 리소스 유형의 경우, 에이전트 로깅 시 리소스 종속성을 미리 선언하는 것이 Databricks에서 지원 및 권장됩니다. 이를 통해 에이전트를 배포할 때 자동 인증 패스스루가 활성화됩니다. 자동 인증 패스스루를 사용하면 Databricks가 에이전트 엔드포인트 내에서 이러한 리소스 종속성에 안전하게 액세스할 수 있도록 단기 자격 증명을 자동으로 프로비저닝, 회전 및 관리합니다.
 # MAGIC
-# MAGIC To enable automatic authentication, specify the dependent Databricks resources when calling `mlflow.pyfunc.log_model().`
+# MAGIC 자동 인증을 활성화하려면 `mlflow.pyfunc.log_model()`을 호출할 때 종속 Databricks 리소스를 지정하세요.
 # MAGIC
-# MAGIC   - **TODO**: If your Unity Catalog tool queries a [vector search index](docs link) or leverages [external functions](docs link), you need to include the dependent vector search index and UC connection objects, respectively, as resources. See docs ([AWS](https://docs.databricks.com/generative-ai/agent-framework/log-agent.html#specify-resources-for-automatic-authentication-passthrough) | [Azure](https://learn.microsoft.com/azure/databricks/generative-ai/agent-framework/log-agent#resources)).
+# MAGIC   - **TODO**: Unity Catalog 도구가 [벡터 검색 인덱스](docs link)를 쿼리하거나 [외부 함수](docs link)를 사용하는 경우, 종속 벡터 검색 인덱스와 UC 연결 객체를 각각 리소스로 포함해야 합니다. 자세한 내용은 문서([AWS](https://docs.databricks.com/generative-ai/agent-framework/log-agent.html#specify-resources-for-automatic-authentication-passthrough) | [Azure](https://learn.microsoft.com/azure/databricks/generative-ai/agent-framework/log-agent#resources))를 참고하세요.
 
 # COMMAND ----------
 
@@ -332,13 +336,12 @@ with mlflow.start_run():
 # COMMAND ----------
 
 # MAGIC %md
-# MAGIC ## Evaluate the agent with Agent Evaluation
+# MAGIC ## 에이전트 평가: Agent Evaluation 사용
 # MAGIC
-# MAGIC Use Mosaic AI Agent Evaluation to evalaute the agent's responses based on expected responses and other evaluation criteria. Use the evaluation criteria you specify to guide iterations, using MLflow to track the computed quality metrics.
-# MAGIC See Databricks documentation ([AWS]((https://docs.databricks.com/aws/generative-ai/agent-evaluation) | [Azure](https://learn.microsoft.com/azure/databricks/generative-ai/agent-evaluation/)).
+# MAGIC Mosaic AI Agent Evaluation을 사용하여 에이전트의 응답을 기대 응답 및 기타 평가 기준에 따라 평가하세요. 지정한 평가 기준을 활용해 반복적으로 개선하고, MLflow를 통해 산출된 품질 지표를 추적할 수 있습니다.
+# MAGIC 자세한 내용은 Databricks 문서([AWS](https://docs.databricks.com/aws/generative-ai/agent-evaluation) | [Azure](https://learn.microsoft.com/azure/databricks/generative-ai/agent-evaluation/))를 참고하세요.
 # MAGIC
-# MAGIC
-# MAGIC To evaluate your tool calls, add custom metrics. See Databricks documentation ([AWS](https://docs.databricks.com/en/generative-ai/agent-evaluation/custom-metrics.html#evaluating-tool-calls) | [Azure](https://learn.microsoft.com/en-us/azure/databricks/generative-ai/agent-evaluation/custom-metrics#evaluating-tool-calls)).
+# MAGIC 툴 호출 평가를 위해 커스텀 지표를 추가할 수 있습니다. 자세한 내용은 Databricks 문서([AWS](https://docs.databricks.com/en/generative-ai/agent-evaluation/custom-metrics.html#evaluating-tool-calls) | [Azure](https://learn.microsoft.com/en-us/azure/databricks/generative-ai/agent-evaluation/custom-metrics#evaluating-tool-calls))를 참고하세요.
 
 # COMMAND ----------
 
@@ -363,8 +366,8 @@ eval_results = mlflow.genai.evaluate(
 # COMMAND ----------
 
 # MAGIC %md
-# MAGIC ## Pre-deployment agent validation
-# MAGIC Before registering and deploying the agent, perform pre-deployment checks using the [mlflow.models.predict()](https://mlflow.org/docs/latest/python_api/mlflow.models.html#mlflow.models.predict) API. See Databricks documentation ([AWS](https://docs.databricks.com/en/machine-learning/model-serving/model-serving-debug.html#validate-inputs) | [Azure](https://learn.microsoft.com/en-us/azure/databricks/machine-learning/model-serving/model-serving-debug#before-model-deployment-validation-checks)).
+# MAGIC ## 사전 배포 에이전트 검증
+# MAGIC 에이전트를 등록하고 배포하기 전에 [mlflow.models.predict()](https://mlflow.org/docs/latest/python_api/mlflow.models.html#mlflow.models.predict) API를 사용하여 사전 배포 검증을 수행하세요. Databricks 문서([AWS](https://docs.databricks.com/en/machine-learning/model-serving/model-serving-debug.html#validate-inputs) | [Azure](https://learn.microsoft.com/en-us/azure/databricks/machine-learning/model-serving/model-serving-debug#before-model-deployment-validation-checks))를 참고하세요.
 
 # COMMAND ----------
 
@@ -377,11 +380,11 @@ mlflow.models.predict(
 # COMMAND ----------
 
 # MAGIC %md
-# MAGIC ## Register the model to Unity Catalog
+# MAGIC ## Unity Catalog에 모델 등록하기
 # MAGIC
-# MAGIC Before you deploy the agent, you must register the agent to Unity Catalog.
+# MAGIC 에이전트를 배포하기 전에, 반드시 에이전트를 Unity Catalog에 등록해야 합니다.
 # MAGIC
-# MAGIC - **TODO** Update the `catalog`, `schema`, and `model_name` below to register the MLflow model to Unity Catalog.
+# MAGIC - **TODO** 아래의 `catalog`, `schema`, `model_name`을 업데이트하여 MLflow 모델을 Unity Catalog에 등록하세요.
 
 # COMMAND ----------
 
@@ -413,7 +416,7 @@ uc_registered_model_info = mlflow.register_model(model_uri=logged_agent_info.mod
 # COMMAND ----------
 
 # MAGIC %md
-# MAGIC ## Deploy the agent
+# MAGIC ## 에이전트 배포하기
 
 # COMMAND ----------
 

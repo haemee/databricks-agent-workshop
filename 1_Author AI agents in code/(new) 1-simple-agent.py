@@ -152,6 +152,14 @@ for event in AGENT.predict_stream(
 # COMMAND ----------
 
 # MAGIC %md
+# MAGIC ### UI 확인
+# MAGIC 1. Experiments 메뉴에서 노트북명으로 Experiment가 생성되었는지 확인 
+# MAGIC 2. 해당 Experiment 클릭
+# MAGIC 3. Trace에 가서 위에서 테스트한 요청이 추적되었는지 확인
+
+# COMMAND ----------
+
+# MAGIC %md
 # MAGIC ### 에이전트를 MLflow 모델로 로깅하고 Unity Catalog에 등록하기
 # MAGIC
 # MAGIC `agent.py` 파일의 코드를 MLflow 모델로 로깅하세요. 자세한 내용은 [MLflow - 코드 기반 모델](https://mlflow.org/docs/latest/models.html#models-from-code) 문서를 참고하세요.
@@ -233,6 +241,14 @@ with mlflow.start_run():
 # COMMAND ----------
 
 # MAGIC %md
+# MAGIC ### UI 확인
+# MAGIC 1. Experiments 메뉴에서 "simple_agent_experiment" Experiment가 생성되었는지 확인 
+# MAGIC 2. Catalog 메뉴에서  
+# MAGIC       카탈로그: 워크샵 카탈로그명 > 스키마: 계정명  아래에 "simple-agent" 모델이 등록되었는지 확인
+
+# COMMAND ----------
+
+# MAGIC %md
 # MAGIC ## 배포 전 에이전트 검증
 # MAGIC 에이전트 배포 전에 사전 검증을 수행하세요.
 # MAGIC
@@ -262,7 +278,9 @@ mlflow.models.predict(
 
 # COMMAND ----------
 
-# Models UI에서 Trace 확인 
+# MAGIC %md
+# MAGIC ### UI 확인
+# MAGIC * Experiments 메뉴에서 "simple_agent_experiment" Experiment에 들어가서 위에서 실행한 두개의 쿼리가 추적되었는지 확인
 
 # COMMAND ----------
 
@@ -313,6 +331,13 @@ eval_results = mlflow.genai.evaluate(
     model_id=logged_agent_info.model_id,
     scorers=scorers,
 )
+
+# COMMAND ----------
+
+# MAGIC %md
+# MAGIC ### UI 확인
+# MAGIC * Experiments 메뉴에서 "simple_agent_experiment" Experiment > Trace 에서 각 추적의 평가 결과 확인
+# MAGIC
 
 # COMMAND ----------
 
@@ -421,6 +446,13 @@ relevance_scorer = relevance_scorer.start(sampling_config=ScorerSamplingConfig(s
 # COMMAND ----------
 
 # MAGIC %md
+# MAGIC ### UI 확인
+# MAGIC * Experiments 메뉴에서 "simple_agent_experiment" Experiment > Scorer 에서 위에서 생성한 Scorer 가 생성되었는지 확인
+# MAGIC
+
+# COMMAND ----------
+
+# MAGIC %md
 # MAGIC ## 에이전트 배포
 # MAGIC
 # MAGIC Agent Framework을 사용하여 에이전트를 배포하세요 ([AWS](https://docs.databricks.com/aws/en/generative-ai/agent-framework/author-agent) | [Azure](https://learn.microsoft.com/en-us/azure/databricks/generative-ai/agent-framework/author-agent) | [GCP](https://docs.databricks.com/gcp/en/generative-ai/agent-framework/author-agent)). 기본적으로, 배포된 에이전트의 트레이스는 현재 실험과 추론 테이블(활성화된 경우)에 기록됩니다.
@@ -431,6 +463,12 @@ from databricks import agents
 
 # 배포 시 태그 설정
 agents.deploy(UC_MODEL_NAME, model_version=logged_agent_info.registered_model_version, tags={"created": "SKIagentworkshop", "sharable": "true"})
+
+# COMMAND ----------
+
+# MAGIC %md
+# MAGIC ### UI 확인
+# MAGIC * Serving에서 엔드포인트가 생성되었는지 확인
 
 # COMMAND ----------
 
@@ -478,14 +516,12 @@ except Exception as e:
 
 # MAGIC %md
 # MAGIC ### Human Feedback Labeling Session 추가
-# MAGIC - developers, end-users 및 domain experts 의 피드백
+# MAGIC - domain experts 의 피드백
+# MAGIC - Expectation > Labeling Schemas 생성 
+# MAGIC - Expectation > Labeling Sessions > Create session
+# MAGIC
+# MAGIC - 참고자료:
 # MAGIC https://docs.databricks.com/aws/en/mlflow3/genai/human-feedback/
-
-# COMMAND ----------
-
-# MAGIC %md
-# MAGIC ### Prompt 관리 추가
-# MAGIC https://docs.databricks.com/aws/en/mlflow3/genai/prompt-version-mgmt/prompt-registry/
 
 # COMMAND ----------
 

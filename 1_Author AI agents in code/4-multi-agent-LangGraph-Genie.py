@@ -1,24 +1,24 @@
 # Databricks notebook source
 # MAGIC %md
-# MAGIC # Mosaic AI Agent Framework: Author and deploy a multi-agent system with Genie and Serving Endpoints
+# MAGIC # Mosaic AI 에이전트 프레임워크: Genie 및 서빙 엔드포인트와 함께 멀티 에이전트 시스템 작성 및 배포
 # MAGIC
-# MAGIC This notebook demonstrates how to build a multi-agent system using Mosaic AI Agent Framework and [LangGraph](https://blog.langchain.dev/langgraph-multi-agent-workflows/), where [Genie](https://www.databricks.com/product/ai-bi/genie) is one of the agents.
-# MAGIC In this notebook, you:
-# MAGIC 1. Author a multi-agent system using LangGraph.
-# MAGIC 1. Wrap the LangGraph agent with MLflow `ResponsesAgent` to ensure compatibility with Databricks features.
-# MAGIC 1. Manually test the multi-agent system's output.
-# MAGIC 1. Log and deploy the multi-agent system.
+# MAGIC 이 노트북은 Mosaic AI Agent Framework와 [LangGraph](https://blog.langchain.dev/langgraph-multi-agent-workflows/)를 사용하여 멀티 에이전트 시스템을 구축하는 방법을 보여줍니다. 여기서 [Genie](https://www.databricks.com/product/ai-bi/genie)는 에이전트 중 하나입니다.
+# MAGIC 이 노트북에서 수행하는 작업:
+# MAGIC 1. LangGraph를 사용하여 멀티 에이전트 시스템을 작성합니다.
+# MAGIC 1. LangGraph 에이전트를 MLflow `ResponsesAgent`로 래핑하여 Databricks 기능과 호환되도록 합니다.
+# MAGIC 1. 멀티 에이전트 시스템의 출력을 수동으로 테스트합니다.
+# MAGIC 1. 멀티 에이전트 시스템을 로깅하고 배포합니다.
 # MAGIC
-# MAGIC This example is based on [LangGraph documentation - Multi-agent supervisor example](https://github.com/langchain-ai/langgraph/blob/main/docs/docs/tutorials/multi_agent/agent_supervisor.md)
+# MAGIC 이 예제는 [LangGraph 문서 - 멀티 에이전트 슈퍼바이저 예제](https://github.com/langchain-ai/langgraph/blob/main/docs/docs/tutorials/multi_agent/agent_supervisor.md)를 기반으로 합니다.
 # MAGIC
-# MAGIC ## Why use a Genie agent?
+# MAGIC ## Genie 에이전트를 사용하는 이유
 # MAGIC
-# MAGIC Multi-agent systems consist of multiple AI agents working together, each with specialized capabilities. As one of those agents, Genie allows users to interact with their structured data using natural language. Unlike SQL functions which can only run pre-defined queries, Genie has the flexibility to create novel queries to answer user questions.
+# MAGIC 멀티 에이전트 시스템은 각각 특화된 기능을 가진 여러 AI 에이전트로 구성됩니다. 그 중 하나인 Genie는 사용자가 자연어로 구조화된 데이터와 상호작용할 수 있도록 해줍니다. SQL 함수는 미리 정의된 쿼리만 실행할 수 있지만, Genie는 사용자 질문에 답하기 위해 새로운 쿼리를 생성할 수 있는 유연성을 제공합니다.
 # MAGIC
-# MAGIC ## Prerequisites
+# MAGIC ## 사전 준비 사항
 # MAGIC
-# MAGIC - Address all `TODO`s in this notebook.
-# MAGIC - Create a Genie Space, see Databricks documentation ([AWS](https://docs.databricks.com/aws/genie/set-up) | [Azure](https://learn.microsoft.com/azure/databricks/genie/set-up)).
+# MAGIC - 이 노트북의 모든 `TODO`를 해결하세요.
+# MAGIC - Genie Space를 생성하세요. Databricks 문서를 참고하세요 ([AWS](https://docs.databricks.com/aws/genie/set-up) | [Azure](https://learn.microsoft.com/azure/databricks/genie/set-up)).
 
 # COMMAND ----------
 
@@ -29,18 +29,18 @@
 
 # MAGIC %md
 # MAGIC
-# MAGIC ## Define the multi-agent system
+# MAGIC ## 멀티 에이전트 시스템 정의
 # MAGIC
-# MAGIC Create a multi-agent system in LangGraph using a supervisor agent node with one or more of the following subagents:
-# MAGIC - **GenieAgent**: A LangChain runnable that allows you to easily interact with your Genie Space to query structured data.
-# MAGIC - **Custom serving agent**: An agent that is already hosted as an existing endpoint on Databricks.
-# MAGIC - **In-code tool-calling agent**: An agent that calls Unity Catalog function tools, defined within this notebook. This example uses `system.ai.python_exec`, but for examples of other tools you can add to your agents, see Databricks documentation ([AWS](https://docs.databricks.com/aws/generative-ai/agent-framework/agent-tool) | [Azure](https://learn.microsoft.com/en-us/azure/databricks/generative-ai/agent-framework/agent-tool)).
+# MAGIC LangGraph에서 슈퍼바이저 에이전트 노드와 다음 중 하나 이상의 서브에이전트를 사용하여 멀티 에이전트 시스템을 만듭니다:
+# MAGIC - **GenieAgent**: Genie Space와 쉽게 상호작용하여 구조화된 데이터를 쿼리할 수 있는 LangChain 러너블.
+# MAGIC - **커스텀 서빙 에이전트**: Databricks에 이미 호스팅된 엔드포인트로 동작하는 에이전트.
+# MAGIC - **코드 내 툴 호출 에이전트**: 이 노트북 내에서 정의된 Unity Catalog 함수 툴을 호출하는 에이전트. 이 예제에서는 `system.ai.python_exec`를 사용하지만, 추가 가능한 다른 툴 예시는 Databricks 문서를 참고하세요 ([AWS](https://docs.databricks.com/aws/generative-ai/agent-framework/agent-tool) | [Azure](https://learn.microsoft.com/en-us/azure/databricks/generative-ai/agent-framework/agent-tool)).
 # MAGIC
-# MAGIC The supervisor agent is responsible for creating and routing tool calls to each of your subagents, passing only the context necessary. You can modify this behavior and pass along the entire message history if desired. See the [LangGraph docs](https://langchain-ai.github.io/langgraph/reference/supervisor/) for more information.
+# MAGIC 슈퍼바이저 에이전트는 각 서브에이전트에 툴 호출을 생성하고 라우팅하며, 필요한 컨텍스트만 전달하는 역할을 합니다. 이 동작을 수정하여 전체 메시지 히스토리를 전달할 수도 있습니다. 자세한 내용은 [LangGraph 문서](https://langchain-ai.github.io/langgraph/reference/supervisor/)를 참고하세요.
 # MAGIC
-# MAGIC ### Write agent code to file
+# MAGIC ### 에이전트 코드를 파일로 작성
 # MAGIC
-# MAGIC Define the agent code in a single cell below. This lets you write the agent code to a local Python file, using the `%%writefile` magic command, for subsequent logging and deployment.
+# MAGIC 아래 셀에서 에이전트 코드를 정의하세요. 이렇게 하면 `%%writefile` 매직 커맨드를 사용해 에이전트 코드를 로컬 Python 파일로 작성할 수 있으며, 이후 로깅 및 배포에 활용할 수 있습니다.
 
 # COMMAND ----------
 
