@@ -21,6 +21,11 @@
 # COMMAND ----------
 
 # MAGIC %md
+# MAGIC ![](https://learn.microsoft.com/en-us/azure/databricks/_static/images/generative-ai/agent-platform/agent-memory.png)
+
+# COMMAND ----------
+
+# MAGIC %md
 # MAGIC ### Install dependencies
 
 # COMMAND ----------
@@ -41,7 +46,7 @@ from databricks.sdk import WorkspaceClient
 from databricks_langchain import CheckpointSaver
 
 # --- TODO: Fill in Lakebase instance name ---
-INSTANCE_NAME = "lakebase-name"
+INSTANCE_NAME = "hpark-agent-memory"
 
 # Create tables if missing
 with CheckpointSaver(instance_name=INSTANCE_NAME) as saver:
@@ -63,7 +68,7 @@ with CheckpointSaver(instance_name=INSTANCE_NAME) as saver:
 
 # COMMAND ----------
 
-# MAGIC %%writefile agent.py
+# MAGIC %%writefile short_term_memory_agent.py
 # MAGIC import logging
 # MAGIC import os
 # MAGIC import uuid
@@ -105,7 +110,7 @@ with CheckpointSaver(instance_name=INSTANCE_NAME) as saver:
 # MAGIC # Lakebase configuration
 # MAGIC ############################################
 # MAGIC # TODO: Fill in Lakebase instance name
-# MAGIC LAKEBASE_INSTANCE_NAME = "lakebase-name"
+# MAGIC LAKEBASE_INSTANCE_NAME = "hpark-agent-memory"
 # MAGIC
 # MAGIC ###############################################################################
 # MAGIC ## Define tools for your agent,enabling it to retrieve data or take actions
@@ -275,7 +280,7 @@ dbutils.library.restartPython()
 
 # COMMAND ----------
 
-from agent import AGENT
+from short_term_memory_agent import AGENT
 # Message 1, don't include thread_id (creates new thread)
 result = AGENT.predict({
     "input": [{"role": "user", "content": "I am working on stateful agents"}]

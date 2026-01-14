@@ -44,7 +44,8 @@
 
 # COMMAND ----------
 
-# MAGIC %%writefile agent.py
+# DBTITLE 1,Untitled
+# MAGIC %%writefile multi_agent.py
 # MAGIC import json
 # MAGIC from typing import Generator, Literal
 # MAGIC from uuid import uuid4
@@ -236,11 +237,11 @@
 # MAGIC # TODO: Add the necessary information about each of your subagents. Subagents could be agents deployed to Model Serving endpoints or Genie Space subagents.
 # MAGIC # Your agent descriptions are crucial for improving quality. Include as much detail as possible.
 # MAGIC EXTERNALLY_SERVED_AGENTS = [
-# MAGIC     Genie(
-# MAGIC         space_id="<your_genie_space_id>",
-# MAGIC         name="<your-genie-name>",
-# MAGIC         description="This agent can answer questions...",
-# MAGIC     ),
+# MAGIC     # Genie(
+# MAGIC     #     space_id="<your_genie_space_id>",
+# MAGIC     #     name="<your-genie-name>",
+# MAGIC     #     description="This agent can answer questions...",
+# MAGIC     # ),
 # MAGIC     # ServedSubAgent(
 # MAGIC     #     endpoint_name="cities-agent",
 # MAGIC     #     name="city-agent", # choose a semantically relevant name for your agent
@@ -289,7 +290,7 @@ dbutils.library.restartPython()
 
 # COMMAND ----------
 
-from agent import AGENT
+from multi_agent import AGENT
 
 # TODO: Replace this placeholder `input_example` with a domain-specific prompt for your agent.
 input_example = {
@@ -325,7 +326,7 @@ for event in AGENT.predict_stream(input_example):
 
 # Determine Databricks resources to specify for automatic auth passthrough at deployment time
 import mlflow
-from agent import EXTERNALLY_SERVED_AGENTS, LLM_ENDPOINT_NAME, TOOLS, Genie
+from multi_agent import EXTERNALLY_SERVED_AGENTS, LLM_ENDPOINT_NAME, TOOLS, Genie
 from databricks_langchain import UnityCatalogTool, VectorSearchRetrieverTool
 from mlflow.models.resources import (
     DatabricksFunction,
@@ -359,7 +360,7 @@ for agent in EXTERNALLY_SERVED_AGENTS:
 with mlflow.start_run():
     logged_agent_info = mlflow.pyfunc.log_model(
         name="agent",
-        python_model="agent.py",
+        python_model="multi_agent.py",
         resources=resources,
         pip_requirements=[
             f"databricks-connect=={get_distribution('databricks-connect').version}",
@@ -394,13 +395,27 @@ mlflow.models.predict(
 
 # COMMAND ----------
 
+# To-Do: 워크샵용 카탈로그명으로 변경 필요
+catalog_name = "hpark_demos"   
+user = spark.sql("SELECT current_user()").collect()[0][0]
+schema_name = user.split("@")[0].replace("@", "_").replace(".", "_").replace("-", "_")
+schema_name = "ski_agent_workshop"
+
+# 개인 별 스키마 생성
+sql = f"""
+CREATE SCHEMA IF NOT EXISTS {catalog_name}.`{schema_name}`
+"""
+
+# 워크샵에서 사용할 개인 별 카탈로그와 스키마 정보 확인
+spark.sql(sql)
+print(f"스키마 생성: {catalog_name}.{schema_name}")
+
+# COMMAND ----------
+
 mlflow.set_registry_uri("databricks-uc")
 
-# TODO: define the catalog, schema, and model name for your UC model
-catalog = ""
-schema = ""
-model_name = ""
-UC_MODEL_NAME = f"{catalog}.{schema}.{model_name}"
+model_name = "multi_agent"
+UC_MODEL_NAME = f"{catalog_name}.{schema_name}.{model_name}"
 
 # register the model to UC
 uc_registered_model_info = mlflow.register_model(

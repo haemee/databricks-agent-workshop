@@ -33,7 +33,7 @@
 
 # COMMAND ----------
 
-# MAGIC %%writefile agent.py
+# MAGIC %%writefile tool_calling_agent.py
 # MAGIC import json
 # MAGIC import warnings
 # MAGIC from typing import Any, Callable, Generator, Optional
@@ -69,12 +69,7 @@
 # MAGIC """
 # MAGIC
 # MAGIC
-# MAGIC ###############################################################################
-# MAGIC ## Define tools for your agent, enabling it to retrieve data or take actions
-# MAGIC ## beyond text generation
-# MAGIC ## To create and see usage examples of more tools, see
-# MAGIC ## https://docs.databricks.com/en/generative-ai/agent-framework/agent-tool.html
-# MAGIC ###############################################################################
+# MAGIC # 에이전트가 사용할 도구의 메타데이터를 담는 데이터 클래스
 # MAGIC class ToolInfo(BaseModel):
 # MAGIC     """
 # MAGIC     에이전트의 도구를 나타내는 클래스입니다.
@@ -87,19 +82,18 @@
 # MAGIC     spec: dict
 # MAGIC     exec_fn: Callable
 # MAGIC
-# MAGIC
+# MAGIC # Unity Catalog UDF를 에이전트 도구로 변환하는 팩토리 함수
 # MAGIC def create_tool_info(tool_spec, exec_fn_param: Optional[Callable] = None):
 # MAGIC     """
 # MAGIC     주어진 도구 사양과 (선택적으로) 사용자 정의 실행 함수를 받아 ToolInfo 객체를 생성하는 팩토리 함수입니다.
 # MAGIC     """
-# MAGIC     # Remove 'strict' property, as Claude models do not support it in tool specs.
+# MAGIC     # Claude 모델이 지원하지 않는 'strict' 속성을 제거
 # MAGIC     tool_spec["function"].pop("strict", None)
 # MAGIC     tool_name = tool_spec["function"]["name"]
 # MAGIC     # Converts tool name with double underscores to UDF dot notation.
 # MAGIC     udf_name = tool_name.replace("__", ".")
 # MAGIC
-# MAGIC     # Define a wrapper that accepts kwargs for the UC tool call,
-# MAGIC     # then passes them to the UC tool execution client
+# MAGIC     # UC 도구 호출을 위해 kwargs를 받아 UC 도구 실행 클라이언트에 전달하는 래퍼를 정의합니다.
 # MAGIC     def exec_fn(**kwargs):
 # MAGIC         function_result = uc_function_client.execute_function(udf_name, kwargs)
 # MAGIC         # Return error message if execution fails, result value if not.
@@ -108,14 +102,15 @@
 # MAGIC         else:
 # MAGIC             return function_result.value
 # MAGIC
+# MAGIC     # ToolInfo 객체를 반환
 # MAGIC     return ToolInfo(name=tool_name, spec=tool_spec, exec_fn=exec_fn_param or exec_fn)
 # MAGIC
 # MAGIC
 # MAGIC # List to store information about all tools available to the agent.
 # MAGIC TOOL_INFOS = []
 # MAGIC
-# MAGIC # UDFs in Unity Catalog can be exposed as agent tools.
-# MAGIC # The following code enables a python code interpreter tool using the system.ai.python_exec UDF.
+# MAGIC # Unity Catalog의 UDF는 에이전트 도구로 노출될 수 있습니다.
+# MAGIC # 아래 코드는 system.ai.python_exec UDF를 사용하여 파이썬 코드 인터프리터 도구를 활성화합니다.
 # MAGIC
 # MAGIC # TODO: Add additional tools
 # MAGIC UC_TOOL_NAMES = ["system.ai.python_exec"]
@@ -135,12 +130,14 @@
 # MAGIC # use VectorSearchRetrieverTool and create_tool_info,
 # MAGIC # then append the result to TOOL_INFOS.
 # MAGIC # Example:
-# MAGIC # VECTOR_SEARCH_TOOLS.append(
-# MAGIC #     VectorSearchRetrieverTool(
-# MAGIC #         index_name="",
-# MAGIC #         # filters="..."
-# MAGIC #     )
-# MAGIC # )
+# MAGIC VECTOR_SEARCH_TOOLS.append(
+# MAGIC     VectorSearchRetrieverTool(
+# MAGIC         index_name="hpark_demos.ski_agent_workshop.doc_vector_index",
+# MAGIC         tool_name="databricks_docs_retriever",
+# MAGIC         tool_description="Retrieves customer handling guides from customer handling manual"
+# MAGIC         # filters="..."
+# MAGIC     )
+# MAGIC )
 # MAGIC
 # MAGIC for vs_tool in VECTOR_SEARCH_TOOLS:
 # MAGIC     TOOL_INFOS.append(create_tool_info(vs_tool.tool, vs_tool.execute))
@@ -280,7 +277,7 @@ dbutils.library.restartPython()
 
 # COMMAND ----------
 
-from agent import AGENT
+from tool_calling_agent import AGENT
 
 result = AGENT.predict({"input": [{"role": "user", "content": "What is 6*7 in Python"}], "custom_inputs": {"session_id": "test-session"}})
 print(result.model_dump(exclude_none=True))
@@ -309,7 +306,7 @@ for chunk in AGENT.predict_stream(
 # COMMAND ----------
 
 # Determine Databricks resources to specify for automatic auth passthrough at deployment time
-from agent import UC_TOOL_NAMES, VECTOR_SEARCH_TOOLS
+from tool_calling_agent import UC_TOOL_NAMES, VECTOR_SEARCH_TOOLS
 import mlflow
 from mlflow.models.resources import DatabricksFunction
 from pkg_resources import get_distribution
@@ -323,7 +320,7 @@ for tool_name in UC_TOOL_NAMES:
 with mlflow.start_run():
     logged_agent_info = mlflow.pyfunc.log_model(
         name="agent",
-        python_model="agent.py",
+        python_model="tool_calling_agent.py",
         pip_requirements=[
             "databricks-openai",
             "backoff",
@@ -388,13 +385,27 @@ mlflow.models.predict(
 
 # COMMAND ----------
 
+# To-Do: 워크샵용 카탈로그명으로 변경 필요
+catalog_name = "hpark_demos"   
+user = spark.sql("SELECT current_user()").collect()[0][0]
+schema_name = user.split("@")[0].replace("@", "_").replace(".", "_").replace("-", "_")
+schema_name = "ski_agent_workshop"
+
+# 개인 별 스키마 생성
+sql = f"""
+CREATE SCHEMA IF NOT EXISTS {catalog_name}.`{schema_name}`
+"""
+
+# 워크샵에서 사용할 개인 별 카탈로그와 스키마 정보 확인
+spark.sql(sql)
+print(f"스키마 생성: {catalog_name}.{schema_name}")
+
+# COMMAND ----------
+
 mlflow.set_registry_uri("databricks-uc")
 
-# TODO: define the catalog, schema, and model name for your UC model
-catalog = ""
-schema = ""
-model_name = ""
-UC_MODEL_NAME = f"{catalog}.{schema}.{model_name}"
+model_name = "tool_calling_agent"
+UC_MODEL_NAME = f"{catalog_name}.{schema_name}.{model_name}"
 
 # register the model to UC
 uc_registered_model_info = mlflow.register_model(model_uri=logged_agent_info.model_uri, name=UC_MODEL_NAME)
@@ -414,10 +425,3 @@ agents.deploy(
     tags={"endpointSource": "docs"},
     deploy_feedback_model=False,
 )
-
-# COMMAND ----------
-
-# MAGIC %md
-# MAGIC ## Next steps
-# MAGIC
-# MAGIC After your agent is deployed, you can chat with it in AI playground to perform additional checks, share it with SMEs in your organization for feedback, or embed it in a production application. See docs ([AWS](https://docs.databricks.com/en/generative-ai/deploy-agent.html) | [Azure](https://learn.microsoft.com/en-us/azure/databricks/generative-ai/deploy-agent)) for details

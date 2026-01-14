@@ -209,6 +209,7 @@ with mlflow.start_run():
         registered_model_name=UC_MODEL_NAME,
     )
 
+
 # COMMAND ----------
 
 # MAGIC %md
