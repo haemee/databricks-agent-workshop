@@ -152,6 +152,14 @@ for event in AGENT.predict_stream(
 # COMMAND ----------
 
 # MAGIC %md
+# MAGIC ### UI 확인
+# MAGIC 1. Experiments 메뉴에서 노트북명으로 Experiment가 생성되었는지 확인 
+# MAGIC 2. 해당 Experiment 클릭
+# MAGIC 3. Trace에 가서 위에서 테스트한 요청이 추적되었는지 확인
+
+# COMMAND ----------
+
+# MAGIC %md
 # MAGIC ### 에이전트를 MLflow 모델로 로깅하고 Unity Catalog에 등록하기
 # MAGIC
 # MAGIC `agent.py` 파일의 코드를 MLflow 모델로 로깅하세요. 자세한 내용은 [MLflow - 코드 기반 모델](https://mlflow.org/docs/latest/models.html#models-from-code) 문서를 참고하세요.
@@ -233,6 +241,14 @@ with mlflow.start_run():
 # COMMAND ----------
 
 # MAGIC %md
+# MAGIC ### UI 확인
+# MAGIC 1. Experiments 메뉴에서 "simple_agent_experiment" Experiment가 생성되었는지 확인 
+# MAGIC 2. Catalog 메뉴에서  
+# MAGIC       카탈로그: 워크샵 카탈로그명 > 스키마: 계정명  아래에 "simple-agent" 모델이 등록되었는지 확인
+
+# COMMAND ----------
+
+# MAGIC %md
 # MAGIC ## 배포 전 에이전트 검증
 # MAGIC 에이전트 배포 전에 사전 검증을 수행하세요.
 # MAGIC
@@ -262,7 +278,9 @@ mlflow.models.predict(
 
 # COMMAND ----------
 
-# Models UI에서 Trace 확인 
+# MAGIC %md
+# MAGIC ### UI 확인
+# MAGIC * Experiments 메뉴에서 "simple_agent_experiment" Experiment에 들어가서 위에서 실행한 두개의 쿼리가 추적되었는지 확인
 
 # COMMAND ----------
 
@@ -316,6 +334,13 @@ eval_results = mlflow.genai.evaluate(
 
 # COMMAND ----------
 
+# MAGIC %md
+# MAGIC ### UI 확인
+# MAGIC * Experiments 메뉴에서 "simple_agent_experiment" Experiment > Trace 에서 각 추적의 평가 결과 확인
+# MAGIC
+
+# COMMAND ----------
+
 from mlflow.genai.scorers import Safety, ScorerSamplingConfig
 
 # 스코어러를 이름과 함께 등록하고 모니터링을 시작합니다.
@@ -324,6 +349,12 @@ safety_judge = safety_judge.start(sampling_config=ScorerSamplingConfig(sample_ra
 
 # 기본적으로 각 judge는 GenAI 품질 평가를 위해 설계된 Databricks 호스팅 LLM을 사용합니다. scorer 정의에서 model 인자를 사용하여 judge 모델을 Databricks 모델 서빙 엔드포인트로 변경할 수 있습니다. 모델은 반드시 databricks:/<databricks-serving-endpoint-name> 형식으로 지정해야 합니다.
 safety_judge = Safety(model="databricks:/databricks-gpt-oss-20b").register(name="my_custom_safety_judge")
+safety_judge = safety_judge.start(sampling_config=ScorerSamplingConfig(sample_rate=0.1))
+
+# COMMAND ----------
+
+from simple_agent import AGENT
+res = AGENT.predict({"input": [{"role": "user", "content": "What is 5+5?"}]}).model_dump(exclude_none=True)
 
 # COMMAND ----------
 
@@ -363,7 +394,8 @@ def formality(inputs, outputs, trace):
         model="databricks:/databricks-gpt-oss-20b",  # optional
     )
 
-    result = my_prompt_judge(request=inputs, response=inputs)
+    res = str(res.get("output", [{}])[0]['content'][0]['text']).lower()
+    result = my_prompt_judge(request=inputs, response=res)
     if hasattr(result, "name"):
         result.name = DEFAULT_FEEDBACK_NAME
     return result
@@ -383,20 +415,20 @@ from mlflow.genai.scorers import scorer, ScorerSamplingConfig
 @scorer
 def mentions_databricks(outputs):
     """Check if the response mentions Databricks"""
-    return "databricks" in str(outputs.get("response", "")).lower()
+    return "databricks" in str(outputs.get("output", [{}])[0]['content'][0]['text']).lower()
 
 # Custom metric: Response length check
 @scorer(aggregations=["mean", "min", "max"])
 def response_length(outputs):
     """Measure response length in characters"""
-    return len(str(outputs.get("response", "")))
+    return len(str(outputs.get("output", [{}])[0]['content'][0]['text']))
 
 # Custom metric with multiple inputs
 @scorer
 def response_relevance_score(inputs, outputs):
     """Score relevance based on keyword matching"""
     query = str(inputs.get("query", "")).lower()
-    response = str(outputs.get("response", "")).lower()
+    response = str(outputs.get("output", [{}])[0]['content'][0]['text']).lower()
 
     # Simple keyword matching (replace with your logic)
     query_words = set(query.split())
@@ -421,6 +453,13 @@ relevance_scorer = relevance_scorer.start(sampling_config=ScorerSamplingConfig(s
 # COMMAND ----------
 
 # MAGIC %md
+# MAGIC ### UI 확인
+# MAGIC * Experiments 메뉴에서 "simple_agent_experiment" Experiment > Scorer 에서 위에서 생성한 Scorer 가 생성되었는지 확인
+# MAGIC
+
+# COMMAND ----------
+
+# MAGIC %md
 # MAGIC ## 에이전트 배포
 # MAGIC
 # MAGIC Agent Framework을 사용하여 에이전트를 배포하세요 ([AWS](https://docs.databricks.com/aws/en/generative-ai/agent-framework/author-agent) | [Azure](https://learn.microsoft.com/en-us/azure/databricks/generative-ai/agent-framework/author-agent) | [GCP](https://docs.databricks.com/gcp/en/generative-ai/agent-framework/author-agent)). 기본적으로, 배포된 에이전트의 트레이스는 현재 실험과 추론 테이블(활성화된 경우)에 기록됩니다.
@@ -431,6 +470,12 @@ from databricks import agents
 
 # 배포 시 태그 설정
 agents.deploy(UC_MODEL_NAME, model_version=logged_agent_info.registered_model_version, tags={"created": "SKIagentworkshop", "sharable": "true"})
+
+# COMMAND ----------
+
+# MAGIC %md
+# MAGIC ### UI 확인
+# MAGIC * Serving에서 엔드포인트가 생성되었는지 확인
 
 # COMMAND ----------
 
@@ -454,7 +499,7 @@ input_data = {
     "input": [
         {
             "role": "user", 
-            "content": "Databricks AI 에 대해서 설명해줘."
+            "content": "Delta 포맷에 대해서 설명해줘"
         }
     ],
     "max_output_tokens": 500 
@@ -478,14 +523,12 @@ except Exception as e:
 
 # MAGIC %md
 # MAGIC ### Human Feedback Labeling Session 추가
-# MAGIC - developers, end-users 및 domain experts 의 피드백
+# MAGIC - domain experts 의 피드백
+# MAGIC - Expectation > Labeling Schemas 생성 
+# MAGIC - Expectation > Labeling Sessions > Create session
+# MAGIC
+# MAGIC - 참고자료:
 # MAGIC https://docs.databricks.com/aws/en/mlflow3/genai/human-feedback/
-
-# COMMAND ----------
-
-# MAGIC %md
-# MAGIC ### Prompt 관리 추가
-# MAGIC https://docs.databricks.com/aws/en/mlflow3/genai/prompt-version-mgmt/prompt-registry/
 
 # COMMAND ----------
 

@@ -349,6 +349,12 @@ safety_judge = safety_judge.start(sampling_config=ScorerSamplingConfig(sample_ra
 
 # 기본적으로 각 judge는 GenAI 품질 평가를 위해 설계된 Databricks 호스팅 LLM을 사용합니다. scorer 정의에서 model 인자를 사용하여 judge 모델을 Databricks 모델 서빙 엔드포인트로 변경할 수 있습니다. 모델은 반드시 databricks:/<databricks-serving-endpoint-name> 형식으로 지정해야 합니다.
 safety_judge = Safety(model="databricks:/databricks-gpt-oss-20b").register(name="my_custom_safety_judge")
+safety_judge = safety_judge.start(sampling_config=ScorerSamplingConfig(sample_rate=0.1))
+
+# COMMAND ----------
+
+from simple_agent import AGENT
+res = AGENT.predict({"input": [{"role": "user", "content": "What is 5+5?"}]}).model_dump(exclude_none=True)
 
 # COMMAND ----------
 
@@ -388,7 +394,8 @@ def formality(inputs, outputs, trace):
         model="databricks:/databricks-gpt-oss-20b",  # optional
     )
 
-    result = my_prompt_judge(request=inputs, response=inputs)
+    res = str(res.get("output", [{}])[0]['content'][0]['text']).lower()
+    result = my_prompt_judge(request=inputs, response=res)
     if hasattr(result, "name"):
         result.name = DEFAULT_FEEDBACK_NAME
     return result
@@ -408,20 +415,20 @@ from mlflow.genai.scorers import scorer, ScorerSamplingConfig
 @scorer
 def mentions_databricks(outputs):
     """Check if the response mentions Databricks"""
-    return "databricks" in str(outputs.get("response", "")).lower()
+    return "databricks" in str(outputs.get("output", [{}])[0]['content'][0]['text']).lower()
 
 # Custom metric: Response length check
 @scorer(aggregations=["mean", "min", "max"])
 def response_length(outputs):
     """Measure response length in characters"""
-    return len(str(outputs.get("response", "")))
+    return len(str(outputs.get("output", [{}])[0]['content'][0]['text']))
 
 # Custom metric with multiple inputs
 @scorer
 def response_relevance_score(inputs, outputs):
     """Score relevance based on keyword matching"""
     query = str(inputs.get("query", "")).lower()
-    response = str(outputs.get("response", "")).lower()
+    response = str(outputs.get("output", [{}])[0]['content'][0]['text']).lower()
 
     # Simple keyword matching (replace with your logic)
     query_words = set(query.split())
@@ -492,7 +499,7 @@ input_data = {
     "input": [
         {
             "role": "user", 
-            "content": "Databricks AI 에 대해서 설명해줘."
+            "content": "Delta 포맷에 대해서 설명해줘"
         }
     ],
     "max_output_tokens": 500 
